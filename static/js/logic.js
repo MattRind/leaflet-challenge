@@ -1,68 +1,115 @@
-console.log("hey there buddy")
+// Store API endpoint as queryUrl2. Selected one week of data because it shows
+//  nice distribution of earthquakes data worldwide and does not take too long to load -- 
+let queryUr2 = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
 
-// Store our API endpoint as queryUrl.
-let queryUrl = "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=2021-01-01&endtime=2021-01-02&maxlongitude=-69.52148437&minlongitude=-123.83789062&maxlatitude=48.74894534&minlatitude=25.16517337";
+// center the map on the US, however there is usually lots of earthquake activity in Alaska --
+let centerCoords = [37.09, -95.71];
+let mapZoomLevel = 5;
 
-// Perform a GET request to the query URL/
-d3.json(queryUrl).then(function (data) {
-  // Once we get a response, send the data.features object to the createFeatures function.
-  createFeatures(data.features);
-});
+var map = L.map('map').setView(centerCoords, mapZoomLevel);
 
-function createFeatures(earthquakeData) {
+// create the tile layer -- 
+tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+}).addTo(map);
+// tileLayer
 
-  // Define a function that we want to run once for each feature in the features array.
-  // Give each feature a popup that describes the place and time of the earthquake.
-  function onEachFeature(feature, layer) {
-    layer.bindPopup(`<h3>${feature.properties.place}</h3><hr><p>${new Date(feature.properties.time)}</p>`);
-  }
-
-  // Create a GeoJSON layer that contains the features array on the earthquakeData object.
-  // Run the onEachFeature function once for each piece of data in the array.
-  let earthquakes = L.geoJSON(earthquakeData, {
-    onEachFeature: onEachFeature
-  });
-
-  // Send our earthquakes layer to the createMap function/
-  createMap(earthquakes);
-}
-
-function createMap(earthquakes) {
-
-  // Create the base layers.
-  let street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-  })
-
-  let topo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-    attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
-  });
-
-  // Create a baseMaps object.
-  let baseMaps = {
-    "Street Map": street,
-    "Topographic Map": topo
+// create layer mapping earthquake data, starting with API call --
+d3.json(queryUr2).then(jsondata => {
+  // all needed data is in 'features' list
+  // ref: https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php
+  const earthquakeArray = jsondata.features
+  // setup function sizing circles based on magnitude
+  // since some JSON values are negative, convert these to zero to avoid math error
+  function markerSize(magnitude) {
+    if (magnitude > 0) {
+      // return Math.sqrt(magnitude) * 20000
+      return (Math.exp(magnitude))*2000;
+      // https://gis.stackexchange.com/questions/221931/calculate-radius-from-magnitude-of-earthquake-on-leaflet-map
+    }
+    else {
+      magnitude = 0;
+      return magnitude
+    }  
   };
 
-  // Create an overlay object to hold our overlay.
-  let overlayMaps = {
-    Earthquakes: earthquakes
+  // setup function that colors circles based on depth; create 6 different categories --
+  function markerColor(depth){ 
+    if (depth < 10) {
+      return "lightgreen";
+    } 
+    else if (depth < 30) {
+      return "yellow";
+    }
+    else if (depth < 50) {
+      return "orange";
+    }
+    else if (depth < 70) {
+      return "red";
+    }
+    else if (depth < 90) {
+      return "darkred";
+    }
+    else {
+     return "purple";
+    } 
   };
 
-  // Create our map, giving it the streetmap and earthquakes layers to display on load.
-  let myMap = L.map("map", {
-    center: [
-      37.09, -95.71
-    ],
-    zoom: 5,
-    layers: [street, earthquakes]
+  const markerArray = earthquakeArray.map(earthquake => {
+    return L.circle([earthquake.geometry.coordinates[1], earthquake.geometry.coordinates[0]],
+      {
+        color: "black",
+        weight : 1,
+        fillColor: markerColor(earthquake.geometry.coordinates[2]),
+        fillOpacity: 0.5,
+        radius: markerSize(earthquake.properties.mag)
+      }    
+    )
+    // Give each feature a popup that describes the earthquake --
+      .bindPopup(`<center><b>${earthquake.properties.title}</b>
+      <br>magnitude of ${earthquake.properties.mag}
+      <br>depth of ${earthquake.geometry.coordinates[2]} km</center>`)
   });
 
-  // Create a layer control.
-  // Pass it our baseMaps and overlayMaps.
-  // Add the layer control to the map.
-  L.control.layers(baseMaps, overlayMaps, {
-    collapsed: false
-  }).addTo(myMap);
+var earthquakeMarkerLayer = L.layerGroup(markerArray);
+earthquakeMarkerLayer.addTo(map)
 
-}
+// Create a baseMaps object --
+var basemaps = {
+  "OpenStreetMap" : tileLayer
+};
+
+// Create an overlay object to hold the overlay -- 
+var overlaymaps = {
+  "earthquakes" : earthquakeMarkerLayer
+};
+
+var layerControl = L.control.layers(basemaps, overlaymaps)
+layerControl.addTo(map)
+
+// Setup the legend -- 
+// need to add code in style.CSS --
+let legend = L.control({ position: "bottomright" });
+legend.onAdd = function(map) {
+  let div = L.DomUtil.create("div", "info legend");
+  let categories = ['-10-10', '10-30', '30-50', '50-70', '70-90', '90+']
+  let colors = ['lightgreen', 'yellow', 'orange', 'red', 'darkred', 'purple'];
+
+  let labels = [];
+  let legendInfo = "<h3>depth (km)</h3>" 
+
+  div.innerHTML = legendInfo;
+
+  categories.forEach(function(category, index) {
+    labels.push( "<li style=\"background-color: " + colors[index] + "\">" + "<li>"  + categories[index] + "</div>" + "</li>" )
+  });
+
+  div.innerHTML += "<ul>" + labels.join("") + "</ul>";
+  return div;
+};
+
+// Adding the legend to the map
+legend.addTo(map);
+
+})
