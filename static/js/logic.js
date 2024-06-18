@@ -2,7 +2,7 @@
 //  nice distribution of earthquakes data worldwide and does not take too long to load -- 
 let queryUr2 = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
 
-// center the map on the US, however there is usually lots of earthquake activity in Alaska --
+// center the map on the US, however there is usually lots of USA earthquake activity in Alaska --
 let centerCoords = [37.09, -95.71];
 let mapZoomLevel = 5;
 
@@ -13,7 +13,7 @@ tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
 }).addTo(map);
-// tileLayer
+
 
 // create layer mapping earthquake data, starting with API call --
 d3.json(queryUr2).then(jsondata => {
@@ -24,8 +24,8 @@ d3.json(queryUr2).then(jsondata => {
   // since some JSON values are negative, convert these to zero to avoid math error
   function markerSize(magnitude) {
     if (magnitude > 0) {
-      // return Math.sqrt(magnitude) * 20000
-      return (Math.exp(magnitude))*2000;
+      // return Math.sqrt(magnitude) * 20000  ...this matches map displayed in Challenge assignment, see Readme.md
+      return (Math.exp(magnitude))*2000;   // use instead, see ref next line
       // https://gis.stackexchange.com/questions/221931/calculate-radius-from-magnitude-of-earthquake-on-leaflet-map
     }
     else {
@@ -68,6 +68,7 @@ d3.json(queryUr2).then(jsondata => {
     )
     // Give each feature a popup that describes the earthquake --
       .bindPopup(`<center><b>${earthquake.properties.title}</b>
+      <br>${earthquake.geometry.coordinates[1]} latitude, ${earthquake.geometry.coordinates[0]} longitude
       <br>magnitude of ${earthquake.properties.mag}
       <br>depth of ${earthquake.geometry.coordinates[2]} km</center>`)
   });
